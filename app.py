@@ -1,89 +1,97 @@
-import easyocr
 import streamlit as st
-from PIL import Image, ImageDraw
-import io
-import base64
-import tensorflow as tf
+import sqlite3
+import re
+import xx
+import conversion
 
-st.markdown(f'<h1 style="color:#000000;text-align: center;font-size:36px;font-family:concat">{"AI-Based OCR Solution for Digitizing and Translating Handwritten Documents in Regional Language"}</h1>', unsafe_allow_html=True)
+# ----- DB Functions -----
+def create_connection(db_file):
+    return sqlite3.connect(db_file)
 
-def add_bg_from_local(image_file):
-    with open(image_file, "rb") as image_file:
-        encoded_string = base64.b64encode(image_file.read())
-    st.markdown(
-    f"""
-    <style>
-    .stApp {{
-        background-image: url(data:image/{"png"};base64,{encoded_string.decode()});
-        background-size: cover
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True
-    )
-add_bg_from_local('back1.jpg')
+def user_exists(conn, email):
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE email=?", (email,))
+    return bool(cur.fetchone())
 
-# Initialize the OCR reader
-reader = easyocr.Reader(['ta', 'en'])
+def validate_email(email):
+    return re.match(r'^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$', email)
 
+def validate_phone(phone):
+    return re.match(r'^[6-9]\d{9}$', phone)
 
+def create_user(conn, user):
+    cur = conn.cursor()
+    cur.execute(''' INSERT INTO users(name, password, email, phone) VALUES(?,?,?,?) ''', user)
+    conn.commit()
 
-# Function to perform OCR and extract text with bounding boxes
-def extract_text_and_boxes(image):
-    # Perform OCR and get bounding boxes along with text
-    bounds = reader.readtext(image)
+def validate_user(conn, name, password):
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE name=? AND password=?", (name, password))
+    user = cur.fetchone()
+    return (True, user[1]) if user else (False, None)
 
-    # Extract the text from the bounding boxes and join them into a single sentence
-    detected_text = ' '.join([bound[1] for bound in bounds])
+# ----- Main App -----
+def show_login():
+    st.title("Login / Register")
+    conn = create_connection("dbs.db")
+    conn.execute('''CREATE TABLE IF NOT EXISTS users (
+                        id INTEGER PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        password TEXT NOT NULL,
+                        email TEXT NOT NULL UNIQUE,
+                        phone TEXT NOT NULL)''')
 
-    # Draw bounding boxes on the image
-    def draw_boxes(image, bounds, color='blue', width=2):
-        draw = ImageDraw.Draw(image)
-        for bound in bounds:
-            p0, p1, p2, p3 = bound[0]
-            draw.line([*p0, *p1, *p2, *p3, *p0], fill=color, width=width)
-        return image
+    option = st.radio("Choose", ["Login", "Register"])
 
-    # Draw boxes on the image
-    image_with_boxes = image.copy()
-    image_with_boxes = draw_boxes(image_with_boxes, bounds)
-    
-    return image_with_boxes, detected_text
+    if option == "Register":
+        name = st.text_input("Name")
+        password = st.text_input("Password", type="password")
+        confirm = st.text_input("Confirm Password", type="password")
+        email = st.text_input("Email")
+        phone = st.text_input("Phone Number")
 
-# Streamlit app layout
-# st.title("OCR Image Text Extraction")
+        if st.button("Register"):
+            if password != confirm:
+                st.error("Passwords do not match.")
+            elif user_exists(conn, email):
+                st.error("User already exists.")
+            elif not validate_email(email) or not validate_phone(phone):
+                st.error("Invalid email or phone.")
+            else:
+                create_user(conn, (name, password, email, phone))
+                st.success("Registered! Please log in.")
 
-# Upload image
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+    elif option == "Login":
+        name = st.text_input("Name")
+        password = st.text_input("Password", type="password")
+        if st.button("Login"):
+            valid, user = validate_user(conn, name, password)
+            if valid:
+                st.session_state.logged_in = True
+                st.session_state.user = user
+                st.rerun()
+            else:
+                st.error("Invalid credentials")
 
-if uploaded_file is not None:
-    # Open image
-    image = Image.open(uploaded_file)
-    
-    # Display the original image
-    st.image(image, caption='Original Image', use_column_width=True)
-    
-    # Extract text and draw boxes on the image
-    image_with_boxes, detected_text = extract_text_and_boxes(image)
-    
-    # Display the image with bounding boxes
-    st.image(image_with_boxes, caption='Image with Detected Text', use_column_width=True)
-    
-    # --- Now you can use your pre-trained model ---
-    # Convert the image to the format your model requires (if needed)
-    # For example, if it's an image classification model, preprocess the image like so:
-    image_array = tf.keras.preprocessing.image.img_to_array(image)
-    image_array = tf.image.resize(image_array, (128, 128))  # Resize to the size your model expects
-    image_array = image_array / 255.0  # Normalize if needed
-    image_array = tf.expand_dims(image_array, axis=0)  # Add batch dimension
-    
-    # Predict using your loaded model
-    prediction = model.predict(image_array)
-    
-    # Display the prediction (assuming it's a classification model)
-    st.subheader("Prediction from Custom Model:")
-    st.write(prediction)
-    
-    # Display the extracted text
-    st.subheader("Extracted Text:")
-    st.write(detected_text)
+    conn.close()
+
+def show_main_menu():
+    st.title(f"Welcome, {st.session_state.user} 👋")
+    option = st.selectbox("Choose an option", ["-- Select --", "Extraction", "Conversion"])
+
+    if option == "Extraction":
+        xx.run_extraction()
+
+    elif option == "Conversion":
+        conversion.run_conversion()
+
+# Initialize session state
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.user = None
+
+# Routing
+if not st.session_state.logged_in:
+    show_login()
+else:
+    show_main_menu()

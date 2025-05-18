@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 absl-py==2.2.0
 aiohttp @ file:///C:/ci/aiohttp_1646806572557/work
 aiosignal @ file:///tmp/build/80754af9/aiosignal_1637843061372/work
@@ -394,3 +395,21 @@ yarl @ file:///C:/ci/yarl_1606940155993/work
 zict==2.0.0
 zipp @ file:///opt/conda/conda-bld/zipp_1641824620731/work
 zope.interface @ file:///C:/ci/zope.interface_1625036252485/work
+=======
+numpy==1.26.4
+opencv-python==4.5.4.60
+Pillow==9.0.1
+tensorflow==2.17.0
+easyocr==1.6.2
+streamlit==1.43.2
+matplotlib==3.9.4
+scikit-learn==1.0.2
+seaborn==0.13.2
+pandas==2.2.2
+indic-nlp-library==0.81
+symspellpy==6.7.7
+transformers==4.41.1
+googletrans==4.0.0rc1
+kymatio==0.4.9
+python-Levenshtein==0.23.0
+>>>>>>> 6cca028f8966a8c94727d771e794402d230750f8
